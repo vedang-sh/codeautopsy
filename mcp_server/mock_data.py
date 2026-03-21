@@ -6,9 +6,18 @@ Mock data for CodeAutopsy — 4 demo scenarios:
   4. notification-service — Kafka consumer lag    (blocking call introduced in consumer)
 """
 
+import os
 from datetime import datetime, timedelta, timezone
 
+import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
+
 _NOW = datetime.now(timezone.utc)
+
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 
 def _ts(minutes_ago: float, seconds_ago: float = 0) -> str:
@@ -140,7 +149,68 @@ def _log_summary(service: str, logs: list) -> dict:
 # get_recent_deployments
 # ─────────────────────────────────────────────
 
+def _fetch_github_commits(repo: str, token: str, hours: int) -> list | None:
+    """Fetch real commits from GitHub API. Returns None on failure."""
+    try:
+        since = (_NOW - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"[GitHub] Fetching commits from {repo} since {since}", flush=True)
+        headers = {"Accept": "application/vnd.github+json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        url = f"https://api.github.com/repos/{repo}/commits?since={since}&per_page=10"
+        r = httpx.get(url, headers=headers, timeout=5)
+        print(f"[GitHub] Response: {r.status_code}", flush=True)
+        if r.status_code != 200:
+            return None
+        commits = r.json()
+        result = []
+        for c in commits:
+            sha = c["sha"][:9]
+            # Fetch diff for the first commit only (to avoid rate limits)
+            diff_summary = ""
+            if not result:
+                detail = httpx.get(
+                    f"https://api.github.com/repos/{repo}/commits/{c['sha']}",
+                    headers=headers, timeout=5
+                ).json()
+                files = detail.get("files", [])
+                diff_summary = "\n".join(
+                    f"{f['filename']}: +{f['additions']} -{f['deletions']}\n{f.get('patch','')[:300]}"
+                    for f in files[:3]
+                )
+            commit_time = c["commit"]["author"]["date"]
+            result.append({
+                "id": f"deploy-{sha}",
+                "version": f"commit-{sha}",
+                "commit_sha": sha,
+                "author": c["commit"]["author"]["email"],
+                "timestamp": commit_time,
+                "status": "success",
+                "environment": "production",
+                "changed_files": [f["filename"] for f in
+                                  httpx.get(f"https://api.github.com/repos/{repo}/commits/{c['sha']}",
+                                            headers=headers, timeout=5).json().get("files", [])[:5]]
+                                 if not result else [],
+                "commit_message": c["commit"]["message"],
+                "diff_summary": diff_summary,
+                "github_url": c["html_url"],
+                "minutes_before_incident": round(
+                    (_NOW - datetime.fromisoformat(commit_time.replace("Z", "+00:00"))).total_seconds() / 60
+                ),
+            })
+        return result
+    except Exception:
+        return None
+
+
 def get_mock_deployments(service_name: str, hours: int) -> dict:
+    # For payment-service, try real GitHub API first
+    if service_name == "payment-service" and GITHUB_REPO:
+        commits = _fetch_github_commits(GITHUB_REPO, GITHUB_TOKEN, hours)
+        if commits:
+            return {"service": service_name, "hours_searched": hours,
+                    "source": "github", "repo": GITHUB_REPO, "deployments": commits}
+
     deploys = {
         "payment-service": [
             {"id": "deploy-7f3a9c", "version": "v2.14.3", "commit_sha": "a3f9c217b",

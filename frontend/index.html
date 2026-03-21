@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CodeAutopsy — AI Incident Root Cause Analysis</title>
   <style>
+    /* ── Theme variables ── */
     :root {
       --bg: #0d1117;
       --surface: #161b22;
@@ -18,8 +19,25 @@
       --error: #ff7b72;
       --thinking: #a371f7;
       --badge-bg: #1f2d3d;
+      --code-bg: #0d1117;
       --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
       --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+
+    body.light {
+      --bg: #f8f8f6;
+      --surface: #ffffff;
+      --surface2: #f3f3f1;
+      --border: #e0e0e0;
+      --text: #1a1a1a;
+      --text-muted: #666666;
+      --accent: #1a6fd4;
+      --accent2: #1a7a3a;
+      --warn: #b85c00;
+      --error: #cc2222;
+      --thinking: #7744cc;
+      --badge-bg: #e8f0fb;
+      --code-bg: #f3f3f3;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,6 +47,7 @@
       color: var(--text);
       font-family: var(--font);
       min-height: 100vh;
+      transition: background 0.2s, color 0.2s;
     }
 
     /* ── Header ── */
@@ -48,12 +67,8 @@
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    header .tagline {
-      color: var(--text-muted);
-      font-size: 13px;
-    }
+    header .tagline { color: var(--text-muted); font-size: 13px; }
     header .badge {
-      margin-left: auto;
       background: var(--badge-bg);
       border: 1px solid var(--border);
       border-radius: 20px;
@@ -61,19 +76,36 @@
       font-size: 12px;
       color: var(--accent2);
     }
+    header .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ── Theme toggle ── */
+    .theme-toggle {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: var(--font);
+    }
+    .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Layout ── */
     .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 32px;
+      max-width: 100%;
+      padding: 24px 32px;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 24px;
     }
-    @media (max-width: 900px) {
-      .container { grid-template-columns: 1fr; padding: 16px; }
-    }
+    @media (max-width: 900px) { .container { grid-template-columns: 1fr; padding: 16px; } }
 
     .panel {
       background: var(--surface);
@@ -114,11 +146,7 @@
     }
     textarea#alertInput:focus { border-color: var(--accent); }
 
-    .btn-row {
-      display: flex;
-      gap: 10px;
-      margin-top: 14px;
-    }
+    .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 
     button {
       padding: 9px 20px;
@@ -128,14 +156,13 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s;
+      font-family: var(--font);
     }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .btn-primary {
-      background: var(--accent);
-      color: #0d1117;
-    }
-    .btn-primary:hover:not(:disabled) { background: #79c0ff; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.12); }
+    body.light .btn-primary { color: #fff; }
 
     .btn-demo {
       background: var(--surface2);
@@ -162,11 +189,12 @@
     #statusBar.running  { background: #1a2744; color: var(--accent);  border: 1px solid #2a3f5e; }
     #statusBar.success  { background: #132e1a; color: var(--accent2); border: 1px solid #2a4a34; }
     #statusBar.error    { background: #2e1a1a; color: var(--error);   border: 1px solid #4a2a2a; }
+    body.light #statusBar.running  { background: #ddeeff; border-color: #99bbdd; }
+    body.light #statusBar.success  { background: #ddf0dd; border-color: #99cc99; }
+    body.light #statusBar.error    { background: #ffeedd; border-color: #ddaa99; }
 
     /* ── Reasoning stream ── */
-    #streamPanel {
-      grid-column: 1 / -1;
-    }
+    #streamPanel { grid-column: 1 / -1; }
 
     #streamBody {
       padding: 12px 18px;
@@ -185,7 +213,6 @@
       padding: 40px 0;
     }
 
-    /* Step cards */
     .step {
       margin-bottom: 10px;
       padding: 10px 14px;
@@ -202,55 +229,19 @@
     .step.phase-analysis  { border-color: #a371f7; }
     .step.phase-pipeline  { border-color: var(--border); }
 
-    .step-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 4px;
-    }
-    .step-phase {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      opacity: 0.6;
-    }
-    .step-agent {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    .step-type {
-      font-size: 11px;
-      opacity: 0.55;
-      margin-left: auto;
-    }
-    .step-msg {
-      font-size: 13px;
-      color: var(--text);
-      font-family: var(--font);
-    }
-    .step-msg code {
-      background: #0d1117;
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-family: var(--mono);
-    }
-    .step.type-thinking .step-msg {
-      color: var(--thinking);
-      font-family: var(--mono);
-      font-size: 11.5px;
-      opacity: 0.8;
-      white-space: pre-wrap;
-    }
+    .step-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .step-phase  { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; }
+    .step-agent  { font-size: 12px; font-weight: 700; color: var(--accent); }
+    .step-type   { font-size: 11px; opacity: 0.55; margin-left: auto; }
+    .step-msg    { font-size: 13px; color: var(--text); font-family: var(--font); }
+    .step-msg code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); }
+    .step.type-thinking .step-msg { color: var(--thinking); font-family: var(--mono); font-size: 11.5px; opacity: 0.8; white-space: pre-wrap; }
     .step.type-tool_call .step-msg { color: var(--warn); }
     .step.type-tool_result .step-msg { color: var(--accent2); }
-    .step.type-agent_complete { background: #161f2c; border-left-width: 4px; }
+    .step.type-agent_complete { background: var(--badge-bg); border-left-width: 4px; }
     .step.type-agent_complete .step-msg { color: var(--accent2); font-family: var(--font); }
 
-    /* Thinking accumulator */
-    .thinking-block {
-      display: none;
-    }
+    .thinking-block { display: none; }
     .thinking-block.active {
       display: block;
       background: #1a1230;
@@ -266,28 +257,60 @@
       overflow-y: auto;
       animation: fadeIn 0.3s ease;
     }
-    .thinking-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      opacity: 0.5;
-      margin-bottom: 4px;
-    }
+    body.light .thinking-block.active { background: #f5f0ff; border-color: #c0a0e0; }
+    .thinking-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 4px; }
 
     /* ── Result panel ── */
-    #resultPanel {
-      grid-column: 1 / -1;
-      display: none;
+    #resultPanel { grid-column: 1 / -1; display: none; }
+
+    .result-panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
+    .result-panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Explain toggle tabs */
+    .explain-toggle {
+      display: none;
+      margin-left: auto;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .explain-toggle.visible { display: flex; }
+    .explain-tab {
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      border-radius: 0;
+    }
+    .explain-tab.active { background: var(--accent); color: #fff; }
+    body.light .explain-tab.active { color: #fff; }
+    .explain-tab:hover:not(.active) { color: var(--accent); }
 
     .result-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
     }
-    @media (max-width: 700px) {
-      .result-grid { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 700px) { .result-grid { grid-template-columns: 1fr; } }
 
     .result-card {
       background: var(--surface2);
@@ -296,53 +319,21 @@
       padding: 16px;
     }
     .result-card.full-width { grid-column: 1 / -1; }
-    .result-card.highlight { border-color: var(--accent); }
+    .result-card.highlight  { border-color: var(--accent); }
 
-    .rc-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .rc-value {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-      line-height: 1.4;
-    }
+    .rc-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+    .rc-value { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.4; }
 
-    .confidence-bar {
-      height: 8px;
-      border-radius: 4px;
-      background: var(--border);
-      margin-top: 10px;
-      overflow: hidden;
-    }
-    .confidence-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: linear-gradient(90deg, #58a6ff, #7ee787);
-      transition: width 0.8s ease;
-    }
+    .confidence-bar { height: 8px; border-radius: 4px; background: var(--border); margin-top: 10px; overflow: hidden; }
+    .confidence-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #58a6ff, #7ee787); transition: width 0.8s ease; }
 
-    .factors-list {
-      list-style: none;
-      margin-top: 6px;
-    }
-    .factors-list li {
-      padding: 5px 0;
-      font-size: 13px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-    }
+    .factors-list { list-style: none; margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+    .factors-list li { padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; }
     .factors-list li:last-child { border-bottom: none; }
     .factors-list li::before { content: "→"; color: var(--warn); flex-shrink: 0; }
 
     pre.code-fix {
-      background: var(--bg);
+      background: var(--code-bg);
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 12px;
@@ -379,16 +370,107 @@
       font-size: 14px;
       font-weight: 700;
     }
+    body.light .eta-badge { background: #ddf0dd; border-color: #99cc99; }
 
-    .escalation-badge {
-      display: inline-block;
-      border-radius: 20px;
-      padding: 4px 14px;
-      font-size: 14px;
-      font-weight: 700;
-    }
+    .escalation-badge { display: inline-block; border-radius: 20px; padding: 4px 14px; font-size: 14px; font-weight: 700; }
     .escalation-badge.no  { background: #132e1a; border: 1px solid #2a4a34; color: var(--accent2); }
     .escalation-badge.yes { background: #2e1a1a; border: 1px solid #4a2a2a; color: var(--error); }
+    body.light .escalation-badge.no  { background: #ddf0dd; border-color: #99cc99; }
+    body.light .escalation-badge.yes { background: #ffeedd; border-color: #ddaa99; }
+
+    /* ── Explain It To Me section ── */
+    #explainSection { display: none; }
+    #explainContent {
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+    .explain-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 16px 0;
+    }
+
+    /* ── Human confirmation gate ── */
+    #confirmGate {
+      display: none;
+      grid-column: 1 / -1;
+    }
+    .gate-card {
+      background: var(--surface2);
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .gate-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .gate-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+    .gate-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-confirm {
+      background: var(--accent2);
+      color: #0d1117;
+      padding: 9px 22px;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-confirm:hover { filter: brightness(1.1); }
+    body.light .btn-confirm { color: #fff; }
+    .btn-different {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 9px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-different:hover { border-color: var(--warn); color: var(--warn); }
+
+    #feedbackArea { display: none; margin-top: 14px; }
+    #feedbackArea textarea {
+      width: 100%;
+      min-height: 80px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 10px 12px;
+      resize: vertical;
+      outline: none;
+      margin-bottom: 10px;
+    }
+    #feedbackArea textarea:focus { border-color: var(--warn); }
+
+    /* ── Fix + rest of results (hidden behind gate) ── */
+
+    /* ── Ethical disclaimer ── */
+    .ethical-disclaimer {
+      grid-column: 1 / -1;
+      background: #2a2200;
+      border: 1px solid #665500;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 12px;
+      color: #ccaa44;
+      line-height: 1.5;
+      display: none;
+    }
+    body.light .ethical-disclaimer {
+      background: #fffbea;
+      border-color: #e0c040;
+      color: #7a5f00;
+    }
 
     /* Spinner */
     .spinner {
@@ -398,18 +480,13 @@
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
+      flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Markdown-like bold in step messages */
     .step-msg strong { color: var(--accent); font-weight: 700; }
 
-    /* ── Elapsed time ── */
-    #elapsedDisplay {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 12px;
-    }
+    #elapsedDisplay { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -420,7 +497,10 @@
     <div class="logo">CodeAutopsy</div>
     <div class="tagline">AI-Powered Incident Root Cause Analysis</div>
   </div>
-  <div class="badge">claude-opus-4-6 · MCP</div>
+  <div class="header-right">
+    <div class="badge">claude-opus-4-6 · MCP</div>
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
+  </div>
 </header>
 
 <div class="container">
@@ -486,9 +566,53 @@
 
   <!-- ── Result Panel ── -->
   <div class="panel" id="resultPanel">
-    <div class="panel-header">📊 Root Cause Analysis</div>
+    <div class="result-panel-header">
+      <span class="result-panel-title">📊 Root Cause Analysis</span>
+      <div class="explain-toggle" id="explainToggle">
+        <button class="explain-tab active" onclick="switchExplain('technical')">Technical</button>
+        <button class="explain-tab" onclick="switchExplain('plain')">💬 Explain It To Me</button>
+      </div>
+    </div>
     <div class="panel-body">
-      <div class="result-grid" id="resultGrid"></div>
+
+      <!-- Technical view (default) -->
+      <div id="technicalView">
+        <div class="result-grid" id="resultGrid"></div>
+
+        <!-- Human confirmation gate -->
+        <div class="result-grid" style="margin-top:16px">
+          <div id="confirmGate">
+            <div class="gate-card">
+              <div class="gate-title">Does this match what you're seeing?</div>
+              <div class="gate-subtitle">Review the root cause above before proceeding to the recommended fix.</div>
+              <div class="gate-btn-row">
+                <button class="btn-confirm" onclick="confirmRCA(true)">✅ Yes, show me the fix</button>
+                <button class="btn-different" onclick="confirmRCA(false)">🤔 Something looks different</button>
+              </div>
+              <div id="feedbackArea">
+                <textarea id="feedbackText" placeholder="Tell us what's different…"></textarea>
+                <button class="btn-primary" onclick="reanalyseWithFeedback()" style="font-size:13px;padding:8px 18px">🔄 Re-analyse</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fix + rest (hidden until confirmed) -->
+        <div id="fixSection" style="margin-top:16px;display:none">
+          <div class="result-grid" id="fixGrid"></div>
+          <div class="ethical-disclaimer" id="ethicalDisclaimer">
+            ⚠ CodeAutopsy surfaces context to support your decision — not replace it.
+            Always verify the root cause matches your observations before applying any fix.
+            In high-severity incidents, escalate to a senior engineer.
+          </div>
+        </div>
+      </div>
+
+      <!-- Plain English view -->
+      <div id="explainSection">
+        <div id="explainContent"></div>
+      </div>
+
     </div>
   </div>
 
@@ -496,33 +620,27 @@
 
 <script>
   const API_BASE = 'http://localhost:8000';
-  let currentSource = null;
-  let startTime = null;
-  let elapsedTimer = null;
+  let currentSource  = null;
+  let startTime      = null;
+  let elapsedTimer   = null;
+  let isDark         = true;
 
-  // ── Load demo alert ──────────────────────────────────────────────────────
+  // Stored results for explain toggle
+  let technicalText  = '';
+  let simplifiedText = '';
+  let isFetchingSimplified = false;
+  let currentAnalysis = null;
 
-  async function loadDemo() {
-    try {
-      const r = await fetch(`${API_BASE}/demo-alert`);
-      const data = await r.json();
-      document.getElementById('alertInput').value = data.alert_text;
-    } catch {
-      document.getElementById('alertInput').value = `ALERT: payment-service — High Error Rate (P1)
-Environment: production
+  // ── Theme toggle ─────────────────────────────────────────────────────────
 
-Stack trace:
-java.net.SocketTimeoutException: Read timed out after 30000ms calling inventory-service
-    at com.example.payment.client.InventoryClient.checkStock(InventoryClient.java:84)
-    at com.example.payment.service.PaymentService.processPayment(PaymentService.java:156)
-    at com.example.payment.controller.PaymentController.pay(PaymentController.java:72)
-
-Errors began approximately 24 minutes ago.
-Affected endpoints: POST /v1/payments (71% failure rate)`;
-    }
+  function toggleTheme() {
+    isDark = !isDark;
+    document.body.classList.toggle('light', !isDark);
+    document.getElementById('themeBtn').textContent = isDark ? '☀️ Light' : '🌙 Dark';
   }
 
-  // Load scenarios into picker on page load
+  // ── Scenario loader ───────────────────────────────────────────────────────
+
   window.addEventListener('load', async () => {
     try {
       const r = await fetch(`${API_BASE}/demo-scenarios`);
@@ -545,9 +663,7 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
       const data = await r.json();
       document.getElementById('alertInput').value = data.alert_text;
       document.getElementById('scenarioPicker').value = id;
-    } catch {
-      loadDemo();
-    }
+    } catch {}
   }
 
   // ── Clear ────────────────────────────────────────────────────────────────
@@ -559,12 +675,23 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
     document.getElementById('streamBody').innerHTML = '<div class="stream-placeholder" id="streamPlaceholder">Analysis events will stream here in real time…</div>';
     document.getElementById('resultPanel').style.display = 'none';
     document.getElementById('resultGrid').innerHTML = '';
+    document.getElementById('fixGrid').innerHTML = '';
+    document.getElementById('confirmGate').style.display = 'none';
+    document.getElementById('fixSection').style.display = 'none';
+    document.getElementById('ethicalDisclaimer').style.display = 'none';
+    document.getElementById('explainToggle').classList.remove('visible');
+    document.getElementById('explainSection').style.display = 'none';
+    document.getElementById('technicalView').style.display = '';
     setStatus('', '');
     document.getElementById('elapsedDisplay').textContent = '';
     resetPhaseCards();
+    technicalText  = '';
+    simplifiedText = '';
+    currentAnalysis = null;
+    switchExplain('technical');
   }
 
-  // ── Status helpers ───────────────────────────────────────────────────────
+  // ── Status helpers ────────────────────────────────────────────────────────
 
   function setStatus(cls, msg) {
     const el = document.getElementById('statusBar');
@@ -574,9 +701,9 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
   }
 
   function setAnalyzing(v) {
-    const btn = document.getElementById('analyzeBtn');
+    const btn     = document.getElementById('analyzeBtn');
     const spinner = document.getElementById('streamSpinner');
-    btn.disabled = v;
+    btn.disabled  = v;
     spinner.style.display = v ? 'inline-block' : 'none';
     if (v) {
       btn.textContent = 'Analysing…';
@@ -594,36 +721,32 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
   function resetPhaseCards() {
     ['triage','context','history','analysis'].forEach(p => {
       const el = document.getElementById(`phase-${p}`);
-      if (el) el.style.borderColor = '';
+      if (el) { el.style.borderColor = ''; el.style.background = ''; }
     });
   }
 
   function highlightPhase(phase) {
-    const colors = {
-      triage: '#58a6ff', context: '#7ee787', history: '#f0883e', analysis: '#a371f7'
-    };
+    const colors = { triage:'#58a6ff', context:'#7ee787', history:'#f0883e', analysis:'#a371f7' };
     const el = document.getElementById(`phase-${phase}`);
     if (el && colors[phase]) {
       el.style.borderColor = colors[phase];
-      el.style.background = 'var(--badge-bg)';
+      el.style.background  = 'var(--badge-bg)';
     }
   }
 
-  // ── Stream rendering ─────────────────────────────────────────────────────
+  // ── Stream rendering ──────────────────────────────────────────────────────
 
-  let thinkingAccum = '';
   let thinkingEl = null;
 
   function appendStep(event) {
-    const body = document.getElementById('streamBody');
+    const body        = document.getElementById('streamBody');
     const placeholder = document.getElementById('streamPlaceholder');
     if (placeholder) placeholder.remove();
 
-    const t = event.type || '';
+    const t     = event.type  || '';
     const phase = event.phase || '';
     const agent = event.agent || '';
 
-    // Collapse consecutive thinking deltas into one block
     if (t === 'thinking') {
       if (!thinkingEl) {
         thinkingEl = document.createElement('div');
@@ -631,45 +754,30 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
         thinkingEl.innerHTML = `<div class="thinking-label">🔮 ${agent} thinking</div><div class="thinking-text"></div>`;
         body.appendChild(thinkingEl);
       }
-      const textDiv = thinkingEl.querySelector('.thinking-text');
-      textDiv.textContent += event.delta || '';
+      thinkingEl.querySelector('.thinking-text').textContent += event.delta || '';
       body.scrollTop = body.scrollHeight;
       return;
     }
 
-    // Any non-thinking event closes the thinking block
     thinkingEl = null;
 
-    // Build step card
     const step = document.createElement('div');
     step.className = `step phase-${phase} type-${t}`;
 
     let msg = '';
     switch (t) {
-      case 'pipeline_start':
-        msg = `🚀 ${event.message || 'Analysis started'}`;
-        break;
-      case 'agent_start':
-        msg = `▶ ${renderMd(event.message || agent)}`;
-        highlightPhase(phase);
-        break;
+      case 'pipeline_start':   msg = `🚀 ${event.message || 'Analysis started'}`; break;
+      case 'agent_start':      msg = `▶ ${renderMd(event.message || agent)}`; highlightPhase(phase); break;
       case 'tool_call':
-        msg = `🔧 ${renderMd(event.message || `Calling ${event.tool}`)}`;
+        msg = `🔧 ${renderMd(event.message || `Calling ${event.tool}`)} <span style="background:var(--badge-bg);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:11px;color:var(--accent);margin-left:6px">${toolSource(event.tool)}</span>`;
         break;
       case 'tool_result':
-        msg = `✅ <strong>${event.tool}</strong>: ${event.summary || 'OK'}`;
+        msg = `✅ <strong>${event.tool}</strong>: ${event.summary || 'OK'} <span style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:11px;color:var(--accent2);margin-left:6px">${toolSource(event.tool)}</span>`;
         break;
-      case 'agent_complete':
-        msg = `✓ <strong>${agent}</strong>: ${renderMd(event.summary || 'Done')}`;
-        break;
-      case 'pipeline_complete':
-        msg = `🏁 ${event.message} (${event.elapsed_seconds}s total)`;
-        break;
-      case 'error':
-        msg = `❌ ${event.message || 'Error'}`;
-        break;
-      default:
-        msg = event.message || t;
+      case 'agent_complete':   msg = `✓ <strong>${agent}</strong>: ${renderMd(event.summary || 'Done')}`; break;
+      case 'pipeline_complete':msg = `🏁 ${event.message} (${event.elapsed_seconds}s total)`; break;
+      case 'error':            msg = `❌ ${event.message || 'Error'}`; break;
+      default:                 msg = event.message || t;
     }
 
     step.innerHTML = `
@@ -684,34 +792,44 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
     body.scrollTop = body.scrollHeight;
   }
 
+  const TOOL_SOURCES = {
+    'fetch_logs':               '📊 Datadog',
+    'get_recent_deployments':   '🐙 GitHub API',
+    'fetch_distributed_trace':  '🔍 Jaeger',
+    'search_runbooks':          '📖 Confluence',
+    'search_past_incidents':    '🚨 PagerDuty',
+    'get_service_dependencies': '🗺️ Service Registry',
+  };
+  function toolSource(tool) { return TOOL_SOURCES[tool] || tool; }
+
   function renderMd(text) {
-    // Simple **bold** rendering
     return (text || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   }
 
-  // ── Result rendering ─────────────────────────────────────────────────────
+  // ── Result rendering ──────────────────────────────────────────────────────
 
   function renderResult(analysis) {
+    currentAnalysis = analysis;
     const panel = document.getElementById('resultPanel');
     const grid  = document.getElementById('resultGrid');
     panel.style.display = 'block';
     grid.innerHTML = '';
 
-    const conf = analysis.confidence_pct || 0;
+    const conf     = analysis.confidence_pct || 0;
     const escalate = analysis.escalation_needed;
 
     // Root cause
     grid.innerHTML += `
       <div class="result-card highlight full-width">
         <div class="rc-label">🎯 Root Cause</div>
-        <div class="rc-value">${analysis.root_cause || 'Unknown'}</div>
+        <div class="rc-value">${escHtml(analysis.root_cause || 'Unknown')}</div>
         <div class="confidence-bar"><div class="confidence-fill" id="confFill" style="width:0%"></div></div>
         <div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Confidence: <strong style="color:var(--accent2)">${conf}%</strong></div>
       </div>
     `;
 
     // Contributing factors
-    const factors = (analysis.contributing_factors || []).map(f => `<li>${f}</li>`).join('');
+    const factors = (analysis.contributing_factors || []).map(f => `<li>${escHtml(f)}</li>`).join('');
     grid.innerHTML += `
       <div class="result-card">
         <div class="rc-label">🔗 Contributing Factors</div>
@@ -719,45 +837,7 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
       </div>
     `;
 
-    // Recommended fix
-    let fixHtml = `<div class="result-card">
-      <div class="rc-label">🔧 Recommended Fix</div>
-      <div class="rc-value" style="font-size:13px">${analysis.recommended_fix || ''}</div>`;
-    if (analysis.fix_code_snippet) {
-      fixHtml += `<pre class="code-fix">${escHtml(analysis.fix_code_snippet)}</pre>`;
-    }
-    fixHtml += `</div>`;
-    grid.innerHTML += fixHtml;
-
-    // References
-    let refHtml = `<div class="result-card">
-      <div class="rc-label">📚 References</div>`;
-    if (analysis.runbook_reference) {
-      const parts = analysis.runbook_reference.split('—');
-      const label = parts[0].trim();
-      const url   = parts[1] ? parts[1].trim() : '#';
-      refHtml += `<div><a class="ref-link" href="${url}" target="_blank">📋 ${label}</a></div>`;
-    }
-    if (analysis.past_incident_reference) {
-      refHtml += `<div style="margin-top:8px"><a class="ref-link" href="#" onclick="return false">🕰 ${escHtml(analysis.past_incident_reference)}</a></div>`;
-    }
-    refHtml += `</div>`;
-    grid.innerHTML += refHtml;
-
-    // ETA + escalation
-    grid.innerHTML += `
-      <div class="result-card">
-        <div class="rc-label">⏱ Estimated Time to Resolve</div>
-        <div class="eta-badge">${analysis.time_to_resolve_estimate_minutes || '?'} minutes</div>
-        <div style="margin-top:14px">
-          <div class="rc-label">🚨 Escalation Needed</div>
-          <div class="escalation-badge ${escalate ? 'yes' : 'no'}">${escalate ? 'YES' : 'NO'}</div>
-          ${escalate && analysis.escalation_reason ? `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">${escHtml(analysis.escalation_reason)}</div>` : ''}
-        </div>
-      </div>
-    `;
-
-    // Reasoning (collapsed)
+    // Analyst reasoning
     if (analysis.reasoning) {
       grid.innerHTML += `
         <div class="result-card full-width">
@@ -766,6 +846,62 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
         </div>
       `;
     }
+
+    // Build fix grid content (hidden until gate confirmed)
+    const fixGrid = document.getElementById('fixGrid');
+    fixGrid.innerHTML = '';
+
+    // Recommended fix
+    let fixHtml = `<div class="result-card">
+      <div class="rc-label">🔧 Recommended Fix</div>
+      <div class="rc-value" style="font-size:13px">${escHtml(analysis.recommended_fix || '')}</div>`;
+    if (analysis.fix_code_snippet) {
+      fixHtml += `<pre class="code-fix">${escHtml(analysis.fix_code_snippet)}</pre>`;
+    }
+    fixHtml += `</div>`;
+    fixGrid.innerHTML += fixHtml;
+
+    // References
+    let refHtml = `<div class="result-card"><div class="rc-label">📚 References</div>`;
+    if (analysis.runbook_reference) {
+      const parts = analysis.runbook_reference.split('—');
+      const label = parts[0].trim();
+      const url   = parts[1] ? parts[1].trim() : '#';
+      refHtml += `<div><a class="ref-link" href="${escHtml(url)}" target="_blank">📋 ${escHtml(label)}</a></div>`;
+    }
+    if (analysis.past_incident_reference) {
+      refHtml += `<div style="margin-top:8px"><a class="ref-link" href="#" onclick="return false">🕰 ${escHtml(analysis.past_incident_reference)}</a></div>`;
+    }
+    refHtml += `</div>`;
+    fixGrid.innerHTML += refHtml;
+
+    // ETA + escalation
+    fixGrid.innerHTML += `
+      <div class="result-card">
+        <div class="rc-label">⏱ Estimated Time to Resolve</div>
+        <div class="eta-badge">${escHtml(String(analysis.time_to_resolve_estimate_minutes || '?'))} minutes</div>
+        <div style="margin-top:14px">
+          <div class="rc-label">🚨 Escalation Needed</div>
+          <div class="escalation-badge ${escalate ? 'yes' : 'no'}">${escalate ? 'YES' : 'NO'}</div>
+          ${escalate && analysis.escalation_reason ? `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">${escHtml(analysis.escalation_reason)}</div>` : ''}
+        </div>
+      </div>
+    `;
+
+    // Show confirmation gate
+    document.getElementById('confirmGate').style.display = 'block';
+
+    // Build technical text for "Explain It To Me"
+    technicalText = [
+      `Root Cause: ${analysis.root_cause || ''}`,
+      `Confidence: ${conf}%`,
+      `Contributing Factors:\n${(analysis.contributing_factors || []).map(f => `- ${f}`).join('\n')}`,
+      analysis.recommended_fix ? `Recommended Fix: ${analysis.recommended_fix}` : '',
+      analysis.reasoning ? `Analyst Reasoning: ${analysis.reasoning}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    // Show explain toggle
+    document.getElementById('explainToggle').classList.add('visible');
 
     // Animate confidence bar
     setTimeout(() => {
@@ -776,27 +912,108 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function escHtml(s) {
-    return String(s || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  // ── Confirmation gate ─────────────────────────────────────────────────────
+
+  function confirmRCA(yes) {
+    if (yes) {
+      document.getElementById('confirmGate').style.display = 'none';
+      document.getElementById('fixSection').style.display = 'block';
+      document.getElementById('ethicalDisclaimer').style.display = 'block';
+    } else {
+      document.getElementById('feedbackArea').style.display = 'block';
+      document.getElementById('feedbackText').focus();
+    }
   }
 
-  // ── Main analysis flow ───────────────────────────────────────────────────
+  function reanalyseWithFeedback() {
+    const note = document.getElementById('feedbackText').value.trim();
+    if (!note) return;
+    const original = document.getElementById('alertInput').value.trim();
+    const combined = original + '\n\nAdditional context from engineer: ' + note;
+    document.getElementById('alertInput').value = combined;
+    document.getElementById('confirmGate').style.display = 'none';
+    document.getElementById('feedbackArea').style.display = 'none';
+    document.getElementById('feedbackText').value = '';
+    startAnalysis();
+  }
+
+  // ── Explain It To Me ──────────────────────────────────────────────────────
+
+  function switchExplain(mode) {
+    const tabs = document.querySelectorAll('.explain-tab');
+    tabs[0].classList.toggle('active', mode === 'technical');
+    tabs[1].classList.toggle('active', mode === 'plain');
+
+    if (mode === 'technical') {
+      document.getElementById('technicalView').style.display = '';
+      document.getElementById('explainSection').style.display = 'none';
+    } else {
+      document.getElementById('technicalView').style.display = 'none';
+      document.getElementById('explainSection').style.display = 'block';
+      loadSimplified();
+    }
+  }
+
+  async function loadSimplified() {
+    if (simplifiedText) {
+      document.getElementById('explainContent').textContent = simplifiedText;
+      return;
+    }
+    if (isFetchingSimplified) return;
+    isFetchingSimplified = true;
+
+    const content = document.getElementById('explainContent');
+    content.innerHTML = `<div class="explain-loading"><span class="spinner"></span> Simplifying for you…</div>`;
+
+    try {
+      const r = await fetch(`${API_BASE}/simplify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: technicalText }),
+      });
+      const data = await r.json();
+      simplifiedText = data.simplified || 'Could not simplify.';
+      content.textContent = simplifiedText;
+    } catch (e) {
+      content.innerHTML = `<span style="color:var(--error)">Failed to load simplified version. Is the API server running?</span>`;
+    } finally {
+      isFetchingSimplified = false;
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function escHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Main analysis flow ────────────────────────────────────────────────────
 
   async function startAnalysis() {
     const alert_text = document.getElementById('alertInput').value.trim();
     if (!alert_text) { setStatus('error', 'Please enter an alert or stack trace.'); return; }
 
-    // Reset UI
+    // Reset
     document.getElementById('streamBody').innerHTML = '';
     document.getElementById('resultPanel').style.display = 'none';
     document.getElementById('resultGrid').innerHTML = '';
+    document.getElementById('fixGrid').innerHTML = '';
+    document.getElementById('confirmGate').style.display = 'none';
+    document.getElementById('fixSection').style.display = 'none';
+    document.getElementById('ethicalDisclaimer').style.display = 'none';
+    document.getElementById('explainToggle').classList.remove('visible');
+    document.getElementById('explainSection').style.display = 'none';
+    document.getElementById('technicalView').style.display = '';
     document.getElementById('elapsedDisplay').textContent = '';
-    thinkingEl = null;
+    thinkingEl      = null;
+    technicalText   = '';
+    simplifiedText  = '';
+    isFetchingSimplified = false;
+    currentAnalysis = null;
     resetPhaseCards();
+    switchExplain('technical');
 
     if (currentSource) { currentSource.close(); currentSource = null; }
 
@@ -810,11 +1027,9 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
         body: JSON.stringify({ alert_text }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
-      const reader = response.body.getReader();
+      const reader  = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -824,16 +1039,12 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete line
+        buffer = lines.pop();
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const raw = line.slice(6).trim();
-          if (raw === '[DONE]') {
-            setAnalyzing(false);
-            setStatus('success', '✅ Analysis complete');
-            return;
-          }
+          if (raw === '[DONE]') { setAnalyzing(false); setStatus('success', '✅ Analysis complete'); return; }
           try {
             const event = JSON.parse(raw);
             appendStep(event);
@@ -841,14 +1052,10 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
               renderResult(event.final_analysis);
               setAnalyzing(false);
               setStatus('success', `✅ Analysis complete in ${event.elapsed_seconds}s`);
-              const s = event.elapsed_seconds;
-              document.getElementById('elapsedDisplay').textContent = `⏱ Completed in ${s}s`;
+              document.getElementById('elapsedDisplay').textContent = `⏱ Completed in ${event.elapsed_seconds}s`;
             }
-            if (event.type === 'error') {
-              setAnalyzing(false);
-              setStatus('error', `❌ ${event.message || 'Analysis failed'}`);
-            }
-          } catch { /* ignore malformed */ }
+            if (event.type === 'error') { setAnalyzing(false); setStatus('error', `❌ ${event.message || 'Analysis failed'}`); }
+          } catch {}
         }
       }
     } catch (err) {
@@ -858,7 +1065,6 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
     }
   }
 
-  // Allow Enter + Ctrl/Cmd to submit
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') startAnalysis();
   });

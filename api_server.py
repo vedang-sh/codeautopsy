@@ -19,10 +19,15 @@ import json
 import traceback
 from typing import AsyncGenerator
 
+import os
+import anthropic as _anthropic
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
+
+load_dotenv()
 
 from orchestrator.orchestrator import run_analysis, DEMO_ALERT, DEMO_ALERTS
 
@@ -133,6 +138,34 @@ async def get_scenario_alert(scenario: str):
     if not alert:
         raise HTTPException(status_code=404, detail=f"Unknown scenario: {scenario}")
     return {"alert_text": alert}
+
+
+class SimplifyRequest(BaseModel):
+    text: str
+
+
+@app.post("/simplify")
+async def simplify_analysis(request: SimplifyRequest):
+    """Re-explain a technical RCA in plain English for junior engineers."""
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="text cannot be empty")
+    try:
+        client = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            system=(
+                "You are a patient senior engineer explaining an incident to a junior developer "
+                "who is stressed and on-call for the first time. Take the following technical "
+                "root cause analysis and rewrite it in simple, calm, encouraging language. "
+                "Avoid jargon. Explain what each technical term means if you must use it. "
+                "Use short paragraphs. Start with 'Here\\'s what happened in plain English:'"
+            ),
+            messages=[{"role": "user", "content": request.text}],
+        )
+        return {"simplified": response.content[0].text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
