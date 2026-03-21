@@ -434,7 +434,9 @@
         <button class="btn-primary" id="analyzeBtn" onclick="startAnalysis()">
           Analyse Incident
         </button>
-        <button class="btn-demo" onclick="loadDemo()">Load Demo</button>
+        <select id="scenarioPicker" onchange="loadScenario(this.value)" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:13px;cursor:pointer;outline:none;">
+          <option value="">— Load scenario —</option>
+        </select>
         <button class="btn-clear" onclick="clearAll()">Clear</button>
       </div>
       <div id="statusBar"></div>
@@ -520,8 +522,33 @@ Affected endpoints: POST /v1/payments (71% failure rate)`;
     }
   }
 
-  // Load demo on page load
-  window.addEventListener('load', loadDemo);
+  // Load scenarios into picker on page load
+  window.addEventListener('load', async () => {
+    try {
+      const r = await fetch(`${API_BASE}/demo-scenarios`);
+      const data = await r.json();
+      const picker = document.getElementById('scenarioPicker');
+      data.scenarios.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.label;
+        picker.appendChild(opt);
+      });
+    } catch {}
+    loadScenario('payment-service');
+  });
+
+  async function loadScenario(id) {
+    if (!id) return;
+    try {
+      const r = await fetch(`${API_BASE}/demo-alert/${id}`);
+      const data = await r.json();
+      document.getElementById('alertInput').value = data.alert_text;
+      document.getElementById('scenarioPicker').value = id;
+    } catch {
+      loadDemo();
+    }
+  }
 
   // ── Clear ────────────────────────────────────────────────────────────────
 

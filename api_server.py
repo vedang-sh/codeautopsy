@@ -24,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from orchestrator.orchestrator import run_analysis, DEMO_ALERT
+from orchestrator.orchestrator import run_analysis, DEMO_ALERT, DEMO_ALERTS
 
 app = FastAPI(
     title="CodeAutopsy",
@@ -112,8 +112,27 @@ async def health():
 
 @app.get("/demo-alert")
 async def get_demo_alert():
-    """Returns the demo alert text for pre-filling the UI."""
     return {"alert_text": DEMO_ALERT}
+
+
+@app.get("/demo-scenarios")
+async def get_demo_scenarios():
+    return {
+        "scenarios": [
+            {"id": "payment-service",      "label": "💳 payment-service — SocketTimeoutException"},
+            {"id": "auth-service",         "label": "🔐 auth-service — NullPointerException"},
+            {"id": "order-service",        "label": "📦 order-service — DB Pool Exhaustion"},
+            {"id": "notification-service", "label": "🔔 notification-service — Kafka Consumer Lag"},
+        ]
+    }
+
+
+@app.get("/demo-alert/{scenario}")
+async def get_scenario_alert(scenario: str):
+    alert = DEMO_ALERTS.get(scenario)
+    if not alert:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario: {scenario}")
+    return {"alert_text": alert}
 
 
 if __name__ == "__main__":

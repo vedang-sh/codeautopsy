@@ -258,10 +258,9 @@ def _summarise_context(ctx: dict) -> str:
 DEMO_ALERT = """\
 ALERT: payment-service — High Error Rate (P1)
 Environment: production
-Time: now
 Error rate: 71% (up from 0%)
 
-Stack trace (sample):
+Stack trace:
 java.net.SocketTimeoutException: Read timed out after 30000ms calling inventory-service
     at com.example.payment.client.InventoryClient.checkStock(InventoryClient.java:84)
     at com.example.payment.service.PaymentService.processPayment(PaymentService.java:156)
@@ -270,6 +269,50 @@ java.net.SocketTimeoutException: Read timed out after 30000ms calling inventory-
 Errors began approximately 24 minutes ago.
 Affected endpoints: POST /v1/payments (71% failure rate)
 """
+
+DEMO_ALERTS = {
+    "payment-service": DEMO_ALERT,
+    "auth-service": """\
+ALERT: auth-service — Login Failures Spiking (P1)
+Environment: production
+Error rate: 52% (up from 0%)
+
+Stack trace:
+java.lang.NullPointerException: Cannot invoke String.isEmpty() on null token
+    at com.example.auth.service.UserService.validateToken(UserService.java:88)
+    at com.example.auth.filter.JwtAuthFilter.doFilterInternal(JwtAuthFilter.java:54)
+    at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:117)
+
+Errors began approximately 38 minutes ago.
+Affected endpoints: POST /v1/auth/login (52% failure rate)
+""",
+    "order-service": """\
+ALERT: order-service — DB Connection Pool Exhausted (P1)
+Environment: production
+Error rate: 89% (up from 0%)
+
+Exception:
+com.zaxxer.hikari.pool.HikariPool$PoolInitializationException:
+  HikariPool-1 - Connection is not available, request timed out after 30000ms
+    at com.example.order.repository.OrderRepository.save(OrderRepository.java:43)
+    at com.example.order.service.OrderService.createOrder(OrderService.java:112)
+
+Errors began approximately 61 minutes ago.
+Affected endpoints: POST /v1/orders (89% failure rate)
+""",
+    "notification-service": """\
+ALERT: notification-service — Kafka Consumer Lag Critical (P2)
+Environment: production
+Consumer lag on topic order.confirmed: 187,400 messages (was 320 one hour ago)
+
+Error in logs:
+Consumer thread blocked for 45000ms in EmailSenderService.sendWithRetry()
+  — possible blocking I/O on HTTP call to delivery-tracker-api
+
+Lag spike began approximately 53 minutes ago.
+Messages are not being processed. Notification backlog growing at ~3500/min.
+""",
+}
 
 
 async def _cli_main():
