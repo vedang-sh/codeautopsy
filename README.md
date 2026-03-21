@@ -4,7 +4,7 @@
 >
 > Claude Code fixes bugs in your editor. CodeAutopsy fixes fires in your production system.
 
-A multi-agent pipeline + MCP server that automatically correlates logs, deployments, distributed traces, runbooks, and past incidents to produce a specific root cause and fix — streamed live to an engineer's browser.
+A multi-agent pipeline + MCP server that automatically correlates logs, deployments, distributed traces, runbooks, and past incidents to produce a specific root cause and fix, streamed live to an engineer's browser.
 
 ---
 
