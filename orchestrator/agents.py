@@ -449,11 +449,14 @@ YOU MUST respond with a JSON object (no markdown fences) with these exact keys:
         messages=[{"role": "user", "content": user_content}],
     ) as stream:
         full_text = ""
+        thinking_text = ""
         for event in stream:
             if event.type == "content_block_delta":
-                if hasattr(event.delta, "thinking"):
+                delta_type = getattr(event.delta, "type", "")
+                if delta_type == "thinking_delta":
+                    thinking_text += event.delta.thinking
                     yield _event(agent_name, "thinking_block", delta=event.delta.thinking)
-                elif hasattr(event.delta, "text"):
+                elif delta_type == "text_delta":
                     full_text += event.delta.text
                     yield _event(agent_name, "thinking", delta=event.delta.text)
 
