@@ -646,12 +646,36 @@
       position: relative;
       z-index: 1; /* keep text readable over the background */
     }
+
+    /* Collapsible panels — only for stream and result panels */
+    #streamPanel .panel-header,
+    #resultPanel .result-panel-header {
+      cursor: pointer;
+      user-select: none;
+    }
+    #streamPanel .panel-header::after,
+    #resultPanel .result-panel-header::after {
+      content: ' ▾';
+      font-size: 12px;
+      opacity: 0.6;
+      float: right;
+      margin-top: 3px;
+      transition: transform 0.2s;
+    }
+    #streamPanel.collapsed .panel-header::after,
+    #resultPanel.collapsed .result-panel-header::after {
+      transform: rotate(-90deg);
+    }
+    #streamPanel.collapsed #streamBody,
+    #resultPanel.collapsed .panel-body {
+      display: none;
+    }
   </style>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-highlight/prism-line-highlight.min.css" rel="stylesheet" />
 </head>
-<body>
+<body class="light">
 
 <header>
   <span style="font-size:22px">🔬</span>
@@ -663,7 +687,7 @@
     <div class="badge" id="accuracyBadge" style="background:#1a3a1a;border-color:#2a5a2a;color:#7ee787;cursor:pointer" onclick="showAccuracyDetails()" title="Click for details">
       📊 Accuracy: <span id="accuracyPct">--</span>%
     </div>
-    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙 Dark</button>
   </div>
 </header>
 
@@ -717,7 +741,7 @@
 
   <!-- ── Streaming Reasoning Panel ── -->
   <div class="panel" id="streamPanel">
-    <div class="panel-header">
+    <div class="panel-header" onclick="togglePanel('streamPanel')">
       <span id="streamSpinner" class="spinner" style="display:none"></span>
       💭 Live Agent Reasoning
     </div>
@@ -730,7 +754,7 @@
 
   <!-- ── Result Panel ── -->
   <div class="panel" id="resultPanel">
-    <div class="result-panel-header">
+    <div class="result-panel-header" onclick="togglePanel('resultPanel')">
       <span class="result-panel-title">📊 Root Cause Analysis</span>
       <div class="explain-toggle" id="explainToggle">
         <button class="explain-tab active" onclick="switchExplain('technical')">Technical</button>
@@ -903,6 +927,13 @@
     } catch {}
   }
 
+  // ── Collapsible panels ────────────────────────────────────────────────────
+
+  function togglePanel(id) {
+    const panel = document.getElementById(id);
+    if (panel) panel.classList.toggle('collapsed');
+  }
+
   // ── Clear ────────────────────────────────────────────────────────────────
 
   function clearAll() {
@@ -1043,7 +1074,22 @@
         msg = `✅ <strong>${event.tool}</strong>: ${event.summary || 'OK'} <span style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:11px;color:var(--accent2);margin-left:6px">${toolSource(event.tool)}</span>`;
         break;
       case 'agent_complete':   msg = `✓ <strong>${agent}</strong>: ${renderMd(event.summary || 'Done')}`; completePhase(phase); break;
-      case 'pipeline_complete':msg = `🏁 ${event.message} (${event.elapsed_seconds}s total)`; break;
+      case 'pipeline_complete':
+        msg = `🏁 ${event.message} (${event.elapsed_seconds}s total)`;
+        // Ensure all phase bars are filled — safe for cached/skipped agents, no setTimeout race
+        const phaseColors = { triage:'#58a6ff', context:'#7ee787', history:'#f0883e', analysis:'#a371f7' };
+        ['triage','context','history','analysis'].forEach(p => {
+          const el = document.getElementById(`phase-${p}`);
+          if (!el) return;
+          el.style.borderColor = phaseColors[p];
+          if (!el.querySelector('.phase-progress')) {
+            const bar = document.createElement('div');
+            bar.className = 'phase-progress';
+            el.prepend(bar);
+          }
+          completePhase(p); // snap to 100% immediately — no animation override possible
+        });
+        break;
       case 'error':
         const recoverable = event.recoverable ? ' <span style="color:var(--warn)">(Retrying...)</span>' : '';
         msg = `❌ ${event.message || 'Error'}${recoverable}`;
