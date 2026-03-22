@@ -327,6 +327,27 @@ Errors began approximately 24 minutes ago.
 Affected endpoints: POST /v1/payments (71% failure rate)
 """
 
+DEMO_ALERT_AWS_DYNAMODB = """\
+ALERT: dynamodb-service — Critical Service Degradation (P0)
+Environment: production (us-east-1)
+Error rate: 94% (up from 0%)
+
+Error:
+java.net.UnknownHostException: dynamodb.us-east-1.amazonaws.com
+    at java.net.InetAddress.getAllByName0(InetAddress.java:1281)
+    at com.amazonaws.internal.ConnectionUtils.connectToEndpoint(ConnectionUtils.java:47)
+    at com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient.invoke(AmazonDynamoDBClient.java:4892)
+
+Errors began approximately 37 minutes ago.
+Affected services: ALL services using DynamoDB (session-service, user-service, auth-service, order-service)
+Impact: Complete inability to read/write to DynamoDB tables
+AWS Health Dashboard: Investigating increased error rates for DynamoDB in US-EAST-1
+
+NOTE: This scenario is based on the real AWS October 2025 outage caused by a DNS race 
+condition that deleted all DynamoDB endpoint IP addresses, affecting 113 AWS services 
+for 15 hours. Root cause: DNS planner/enactor race condition in automated DNS management.
+"""
+
 DEMO_ALERTS = {
     "payment-service": DEMO_ALERT,
     "auth-service": """\
@@ -369,6 +390,7 @@ Consumer thread blocked for 45000ms in EmailSenderService.sendWithRetry()
 Lag spike began approximately 53 minutes ago.
 Messages are not being processed. Notification backlog growing at ~3500/min.
 """,
+    "dynamodb-service": DEMO_ALERT_AWS_DYNAMODB
 }
 
 

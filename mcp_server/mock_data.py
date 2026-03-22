@@ -48,6 +48,7 @@ def get_mock_logs(service_name: str, time_range_minutes: int, error_keyword: str
         "auth-service": _logs_auth,
         "order-service": _logs_order,
         "notification-service": _logs_notification,
+        "dynamodb-service": _logs_dynamodb,
     }
 
     builder = scenarios.get(_normalise(service_name))
@@ -558,3 +559,183 @@ def get_mock_dependencies(service_name: str) -> dict:
         return {"service": service_name, "upstream": [], "downstream": [], "note": "Unknown service"}
 
     return {"service": service_name, **graph[service_name]}
+
+
+def _logs_dynamodb():
+    """AWS DynamoDB DNS race condition - October 2025 real incident"""
+    normal = [
+        {"timestamp": _ts(m), "level": "INFO", "service": "dynamodb-service",
+         "message": f"DynamoDB query successful table=UserSessions latency={45+m}ms",
+         "traceId": f"trace-pre-{m:04d}"} 
+        for m in range(40, 50)
+    ]
+    
+    errors = []
+    # DNS resolution failures start appearing
+    for i in range(1, 38):
+        level = "ERROR" if i % 2 == 0 else "WARN"
+        if level == "ERROR":
+            e = {
+                "timestamp": _ts(i, i*13%60),
+                "level": "ERROR",
+                "service": "dynamodb-service",
+                "traceId": f"trace-ddb-{7000+i:04d}",
+                "message": f"UnknownHostException: dynamodb.us-east-1.amazonaws.com - DNS resolution failed after {i*100}ms",
+                "stackTrace": (
+                    "java.net.UnknownHostException: dynamodb.us-east-1.amazonaws.com\n"
+                    "\tat java.net.InetAddress.getAllByName0(InetAddress.java:1281)\n"
+                    "\tat com.amazonaws.internal.ConnectionUtils.connectToEndpoint(ConnectionUtils.java:47)\n"
+                    "\tat com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient.invoke(AmazonDynamoDBClient.java:4892)"
+                )
+            }
+        else:
+            e = {
+                "timestamp": _ts(i, i*13%60),
+                "level": "WARN",
+                "service": "dynamodb-service",
+                "traceId": f"trace-ddb-{7000+i:04d}",
+                "message": f"DynamoDB connection timeout - retrying (attempt {i%5+1}/5)"
+            }
+        errors.append(e)
+    
+    return errors + normal
+
+
+def _deployments_dynamodb():
+    """DNS automation system deployment that introduced the race condition"""
+    return [
+        {
+            "version": "dns-automation-v2.14.3",
+            "deployed_at": _ts(37),
+            "minutes_before_incident": 37,
+            "author": "aws-automation-bot",
+            "commit_sha": "a7f3c2d",
+            "message": "feat: optimize DNS planner performance for large fleets",
+            "files_changed": ["dns_planner.py", "dns_enactor.py", "load_balancer_manager.py"],
+            "diff_summary": (
+                "Modified DNS planner to handle larger IP address update batches\n"
+                "- Increased batch size from 500 to 2000 load balancers\n"
+                "- Added parallel processing for plan execution\n"
+                "- Changed plan completion detection logic\n"
+                "⚠️ LATENT BUG: Race condition when slow plan overlaps with fast plan at same timestamp"
+            ),
+            "status": "deployed"
+        },
+        {
+            "version": "dns-automation-v2.14.2",
+            "deployed_at": _ts(180),
+            "minutes_before_incident": 180,
+            "author": "aws-automation-bot",
+            "commit_sha": "b2e9f1a",
+            "message": "chore: routine dependency updates",
+            "files_changed": ["requirements.txt"],
+            "diff_summary": "Updated boto3, updated internal AWS SDK",
+            "status": "deployed"
+        }
+    ]
+
+
+def _trace_dynamodb():
+    """Distributed trace showing DNS resolution failure cascade"""
+    return {
+        "traceId": "trace-ddb-7015",
+        "rootSpan": "api-gateway-request",
+        "total_duration_ms": 30247,
+        "status": "ERROR",
+        "spans": [
+            {
+                "spanId": "span-001",
+                "parentSpanId": None,
+                "service": "api-gateway",
+                "operation": "POST /api/v1/sessions",
+                "start_ms": 0,
+                "duration_ms": 30247,
+                "status": "ERROR",
+                "tags": {"http.status_code": 503, "error": "true"}
+            },
+            {
+                "spanId": "span-002",
+                "parentSpanId": "span-001",
+                "service": "session-service",
+                "operation": "createSession",
+                "start_ms": 12,
+                "duration_ms": 30221,
+                "status": "ERROR",
+                "tags": {"error": "true", "error.type": "UnknownHostException"}
+            },
+            {
+                "spanId": "span-003",
+                "parentSpanId": "span-002",
+                "service": "dynamodb-client",
+                "operation": "PutItem table=UserSessions",
+                "start_ms": 45,
+                "duration_ms": 30178,
+                "status": "ERROR",
+                "tags": {
+                    "error": "true",
+                    "error.message": "UnknownHostException: dynamodb.us-east-1.amazonaws.com",
+                    "aws.region": "us-east-1",
+                    "aws.service": "dynamodb",
+                    "dns.resolution.failed": "true"
+                }
+            }
+        ]
+    }
+
+
+def _runbooks_dynamodb():
+    """Runbooks for AWS service degradation"""
+    return {
+        "total_found": 2,
+        "runbooks": [
+            {
+                "id": "RB-AWS-DNS-001",
+                "title": "AWS Service DNS Resolution Failures",
+                "url": "https://wiki.internal/runbooks/aws-dns-failures",
+                "relevance_score": 0.94,
+                "summary": (
+                    "Procedure for handling AWS service endpoint DNS resolution failures. "
+                    "Check AWS Health Dashboard, verify internal DNS resolvers, implement "
+                    "exponential backoff with jitter, consider failover to alternate region."
+                ),
+                "last_updated": _ts(720)
+            },
+            {
+                "id": "RB-AWS-OUTAGE-002",
+                "title": "AWS Regional Outage Response",
+                "url": "https://wiki.internal/runbooks/aws-regional-outage",
+                "relevance_score": 0.89,
+                "summary": (
+                    "Response plan for AWS regional outages. Activate multi-region failover, "
+                    "communicate with stakeholders, monitor AWS status page, document impact."
+                ),
+                "last_updated": _ts(1440)
+            }
+        ]
+    }
+
+
+def _incidents_dynamodb():
+    """Past AWS-related incidents"""
+    return {
+        "total_found": 1,
+        "incidents": [
+            {
+                "id": "INC-9821",
+                "title": "AWS S3 DNS resolution intermittent failures",
+                "occurred_at": _ts(43200),  # 30 days ago
+                "resolved_at": _ts(43080),  # resolved after 2 hours
+                "duration_minutes": 120,
+                "root_cause": (
+                    "AWS S3 endpoint DNS records temporarily unavailable due to "
+                    "AWS internal DNS infrastructure issue in us-east-1"
+                ),
+                "resolution": (
+                    "Waited for AWS to resolve the DNS issue. Implemented client-side "
+                    "DNS caching and retry logic to mitigate future occurrences."
+                ),
+                "similarity_score": 0.87,
+                "services_affected": ["s3-client", "backup-service", "media-upload-service"]
+            }
+        ]
+    }
