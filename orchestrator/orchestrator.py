@@ -123,12 +123,10 @@ async def run_analysis(
     # ------------------------------------------------------------------
     # Phase 2: Context + History (parallel)
     # ------------------------------------------------------------------
-    yield {
-        "phase": "gather",
-        "type": "agent_start",
-        "agent": "Context Gatherer + History Agent",
-        "message": "Gathering logs, deployments, traces, runbooks, past incidents in parallel…",
-    }
+    yield {"phase": "context", "type": "agent_start", "agent": "Context Gatherer",
+           "message": "Gathering logs, deployments, traces in parallel…"}
+    yield {"phase": "history", "type": "agent_start", "agent": "History Agent",
+           "message": "Searching runbooks and past incidents in parallel…"}
 
     # Run context gatherer and history agent concurrently
     context_gen = context_gatherer_agent(triage_result, client)
