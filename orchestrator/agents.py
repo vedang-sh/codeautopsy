@@ -35,7 +35,7 @@ from mcp_server.mock_data import (
     get_mock_dependencies,
 )
 
-MODEL = "claude-opus-4-6"
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-6")
 
 # ---------------------------------------------------------------------------
 # Tool catalogue (Anthropic tool-use format)
@@ -214,14 +214,18 @@ async def context_gatherer_agent(
     service = triage.get("service_name", "payment-service")
     yield _event(agent_name, "start", message=f"Gathering context for **{service}**…")
 
-    system = """You are an SRE context-gathering agent.
-Use the available tools to collect diagnostic data about the incident:
-1. fetch_logs for the affected service (last 30 minutes)
-2. get_recent_deployments for the affected service (last 4 hours)
-3. fetch_distributed_trace using any trace ID from the logs
-4. get_service_dependencies for the affected service
+    system = f"""You are an SRE context-gathering agent.
+Use the available tools to collect diagnostic data. The affected service is: {service}
 
-Call all necessary tools and summarise what you find. Be thorough."""
+IMPORTANT: Always use the EXACT service name "{service}" when calling fetch_logs, get_recent_deployments, and get_service_dependencies.
+
+Steps:
+1. fetch_logs(service_name="{service}", time_range_minutes=30)
+2. get_recent_deployments(service_name="{service}", hours=4)
+3. fetch_distributed_trace using any trace ID found in the logs (use the traceId field)
+4. get_service_dependencies(service_name="{service}")
+
+Call all tools and summarise your findings."""
 
     messages = [
         {
@@ -445,11 +449,14 @@ YOU MUST respond with a JSON object (no markdown fences) with these exact keys:
         messages=[{"role": "user", "content": user_content}],
     ) as stream:
         full_text = ""
+        thinking_text = ""
         for event in stream:
             if event.type == "content_block_delta":
-                if hasattr(event.delta, "thinking"):
+                delta_type = getattr(event.delta, "type", "")
+                if delta_type == "thinking_delta":
+                    thinking_text += event.delta.thinking
                     yield _event(agent_name, "thinking_block", delta=event.delta.thinking)
-                elif hasattr(event.delta, "text"):
+                elif delta_type == "text_delta":
                     full_text += event.delta.text
                     yield _event(agent_name, "thinking", delta=event.delta.text)
 

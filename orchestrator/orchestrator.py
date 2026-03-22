@@ -33,6 +33,7 @@ from orchestrator.agents import (
     history_agent,
     analyst_agent,
 )
+from orchestrator.db import save_incident, query_incidents, find_cached_incident
 
 load_dotenv()
 
@@ -118,6 +119,31 @@ async def run_analysis(
 
     if not triage_result:
         yield {"phase": "triage", "type": "error", "message": "Triage failed to identify service"}
+        return
+
+    # ------------------------------------------------------------------
+    # Cache check — skip full pipeline if we've seen this before
+    # ------------------------------------------------------------------
+    cached = find_cached_incident(
+        triage_result.get("service_name", ""),
+        triage_result.get("error_type", ""),
+    )
+    if cached:
+        elapsed = round(time.time() - start_time, 1)
+        yield {
+            "phase": "pipeline",
+            "type": "pipeline_complete",
+            "elapsed_seconds": elapsed,
+            "final_analysis": cached,
+            "triage": triage_result,
+            "data_sources": ["Supabase incident cache"],
+            "cache_hit": True,
+            "message": f"Cache hit — returning resolved incident in {elapsed}s (skipped full pipeline)",
+        }
+        # Still save so we track recurrence frequency
+        saved = save_incident(triage_result, cached)
+        if saved:
+            print(f"[Supabase] Recurrence recorded for {triage_result.get('service_name')}", flush=True)
         return
 
     # ------------------------------------------------------------------
@@ -224,13 +250,18 @@ async def run_analysis(
     sources = []
     if context_data.get("fetch_logs"):
         log_data = context_data["fetch_logs"]
-        sources.append(f"{log_data.get('total_lines', log_data.get('error_count', 0))} log lines")
+        total = log_data.get("total_logs", log_data.get("total_lines", log_data.get("error_count", 0)))
+        sources.append(f"{total} log line{'s' if total != 1 else ''}")
     if context_data.get("get_recent_deployments"):
         deps = context_data["get_recent_deployments"].get("deployments", [])
-        sources.append(f"{len(deps)} deployment{'s' if len(deps) != 1 else ''}")
+        if deps:
+            sources.append(f"{len(deps)} deployment{'s' if len(deps) != 1 else ''}")
     if context_data.get("fetch_distributed_trace"):
-        spans = context_data["fetch_distributed_trace"].get("spans", [])
-        sources.append(f"{len(spans)} trace span{'s' if len(spans) != 1 else ''}")
+        trace = context_data["fetch_distributed_trace"]
+        dur = trace.get("total_duration_ms")
+        status = trace.get("status", "")
+        label = f"1 distributed trace ({dur}ms, {status})" if dur else "1 distributed trace"
+        sources.append(label)
     if history_data.get("search_runbooks"):
         rb = history_data["search_runbooks"].get("total_found", 0)
         if rb:
@@ -249,6 +280,12 @@ async def run_analysis(
         "data_sources": sources,
         "message": f"Analysis complete in {elapsed}s",
     }
+
+    # Persist to Supabase for future history lookups
+    if analysis_result:
+        saved = save_incident(triage_result, analysis_result)
+        if saved:
+            print(f"[Supabase] Incident saved for {triage_result.get('service_name')}", flush=True)
 
 
 def _summarise_context(ctx: dict) -> str:

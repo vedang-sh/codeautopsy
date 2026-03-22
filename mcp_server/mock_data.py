@@ -16,8 +16,15 @@ load_dotenv()
 
 _NOW = datetime.now(timezone.utc)
 
-GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+# Per-service GitHub repos
+_GITHUB_REPOS = {
+    "payment-service":      os.environ.get("GITHUB_REPO", ""),
+    "auth-service":         os.environ.get("GITHUB_REPO_AUTH", ""),
+    "order-service":        os.environ.get("GITHUB_REPO_ORDER", ""),
+    "notification-service": os.environ.get("GITHUB_REPO_NOTIF", ""),
+}
 
 
 def _ts(minutes_ago: float, seconds_ago: float = 0) -> str:
@@ -29,6 +36,11 @@ def _ts(minutes_ago: float, seconds_ago: float = 0) -> str:
 # fetch_logs
 # ─────────────────────────────────────────────
 
+def _normalise(name: str) -> str:
+    """Normalise service name: lowercase, spaces/underscores → hyphens."""
+    return name.lower().replace("_", "-").replace(" ", "-").strip()
+
+
 def get_mock_logs(service_name: str, time_range_minutes: int, error_keyword: str = "") -> dict:
 
     scenarios = {
@@ -38,7 +50,7 @@ def get_mock_logs(service_name: str, time_range_minutes: int, error_keyword: str
         "notification-service": _logs_notification,
     }
 
-    builder = scenarios.get(service_name)
+    builder = scenarios.get(_normalise(service_name))
     if not builder:
         return {"service": service_name, "time_range_minutes": time_range_minutes,
                 "total_logs": 0, "error_count": 0, "logs": [], "summary": {}}
@@ -149,15 +161,14 @@ def _log_summary(service: str, logs: list) -> dict:
 # get_recent_deployments
 # ─────────────────────────────────────────────
 
-def _fetch_github_commits(repo: str, token: str, hours: int) -> list | None:
-    """Fetch real commits from GitHub API. Returns None on failure."""
+def _fetch_github_commits(repo: str, token: str, hours: int = 0) -> list | None:
+    """Fetch the latest commits from GitHub API (no time filter). Returns None on failure."""
     try:
-        since = (_NOW - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        print(f"[GitHub] Fetching commits from {repo} since {since}", flush=True)
+        print(f"[GitHub] Fetching latest commits from {repo}", flush=True)
         headers = {"Accept": "application/vnd.github+json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        url = f"https://api.github.com/repos/{repo}/commits?since={since}&per_page=10"
+        url = f"https://api.github.com/repos/{repo}/commits?per_page=10"
         r = httpx.get(url, headers=headers, timeout=5)
         print(f"[GitHub] Response: {r.status_code}", flush=True)
         if r.status_code != 200:
@@ -204,12 +215,14 @@ def _fetch_github_commits(repo: str, token: str, hours: int) -> list | None:
 
 
 def get_mock_deployments(service_name: str, hours: int) -> dict:
-    # For payment-service, try real GitHub API first
-    if service_name == "payment-service" and GITHUB_REPO:
-        commits = _fetch_github_commits(GITHUB_REPO, GITHUB_TOKEN, hours)
+    service_name = _normalise(service_name)
+    # Try real GitHub API first for any service that has a configured repo
+    repo = _GITHUB_REPOS.get(service_name, "")
+    if repo:
+        commits = _fetch_github_commits(repo, GITHUB_TOKEN, hours)
         if commits:
             return {"service": service_name, "hours_searched": hours,
-                    "source": "github", "repo": GITHUB_REPO, "deployments": commits}
+                    "source": "github", "repo": repo, "deployments": commits}
 
     deploys = {
         "payment-service": [
@@ -439,7 +452,17 @@ def get_mock_runbooks(keyword: str) -> dict:
 # ─────────────────────────────────────────────
 
 def get_mock_incidents(error_pattern: str) -> dict:
-    all_incidents = [
+    # Pull real resolved incidents from Supabase first
+    db_incidents = []
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from orchestrator.db import query_incidents
+        db_incidents = query_incidents(limit=20)
+    except Exception:
+        pass
+
+    all_incidents = db_incidents + [
         {"id": "INC-4821", "title": "PaymentService SocketTimeoutException — inventory timeout config",
          "date": "2024-09-12", "duration_minutes": 18, "severity": "P1",
          "affected_services": ["payment-service"],
@@ -468,7 +491,7 @@ def get_mock_incidents(error_pattern: str) -> dict:
          "root_cause": "Synchronous HTTP call added to consumer thread. delivery-tracker-api P95 is 40-50s, blocking Kafka ack.",
          "resolution": "Moved HTTP call to async CompletableFuture. Lag drained within 10 minutes.",
          "similarity_score": 0.96},
-    ]
+    ]  # end mock incidents
 
     pat = error_pattern.lower()
     results = sorted(
@@ -486,6 +509,7 @@ def get_mock_incidents(error_pattern: str) -> dict:
 # ─────────────────────────────────────────────
 
 def get_mock_dependencies(service_name: str) -> dict:
+    service_name = _normalise(service_name)
     graph = {
         "payment-service": {
             "upstream": ["api-gateway", "checkout-service", "mobile-api"],
