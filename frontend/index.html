@@ -472,6 +472,44 @@
       color: #7a5f00;
     }
 
+    /* ── Sources used badge ── */
+    .sources-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 6px 12px; font-size: 12px;
+      color: var(--text-muted); margin-top: 10px; flex-wrap: wrap;
+    }
+    .sources-badge span { color: var(--accent); font-weight: 600; }
+
+    /* ── Rating buttons ── */
+    .rating-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .rating-label { font-size: 12px; color: var(--text-muted); }
+    .btn-rate {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 5px 14px; font-size: 14px;
+      cursor: pointer; color: var(--text); transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-rate:hover { border-color: var(--accent); background: var(--badge-bg); }
+    .btn-rate.selected-up { border-color: var(--accent2); background: #1a3a1a; }
+    .btn-rate.selected-down { border-color: var(--error); background: #3a1a1a; }
+    .rating-thanks { font-size: 12px; color: var(--accent2); display: none; }
+
+    /* ── Caution confirm button ── */
+    .btn-caution {
+      background: #3a2800; border: 1px solid var(--warn);
+      color: var(--warn); border-radius: 8px; padding: 10px 22px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: filter 0.15s;
+    }
+    .btn-caution:hover { filter: brightness(1.2); }
+    .caution-note {
+      font-size: 11px; color: var(--warn); margin-top: 6px; opacity: 0.8;
+    }
+
     /* Spinner */
     .spinner {
       display: inline-block;
@@ -585,10 +623,11 @@
             <div class="gate-card">
               <div class="gate-title">Does this match what you're seeing?</div>
               <div class="gate-subtitle">Review the root cause above before proceeding to the recommended fix.</div>
-              <div class="gate-btn-row">
-                <button class="btn-confirm" onclick="confirmRCA(true)">✅ Yes, show me the fix</button>
+              <div class="gate-btn-row" id="gateBtnRow">
+                <button class="btn-confirm" id="btnConfirm" onclick="confirmRCA(true)">✅ Yes, show me the fix</button>
                 <button class="btn-different" onclick="confirmRCA(false)">🤔 Something looks different</button>
               </div>
+              <div class="caution-note" id="cautionNote" style="display:none">⚠ Low confidence — double-check your observations before proceeding.</div>
               <div id="feedbackArea">
                 <textarea id="feedbackText" placeholder="Tell us what's different…"></textarea>
                 <button class="btn-primary" onclick="reanalyseWithFeedback()" style="font-size:13px;padding:8px 18px">🔄 Re-analyse</button>
@@ -604,6 +643,15 @@
             ⚠ CodeAutopsy surfaces context to support your decision — not replace it.
             Always verify the root cause matches your observations before applying any fix.
             In high-severity incidents, escalate to a senior engineer.
+            <div id="sourcesUsed" class="sources-badge" style="display:none">
+              📂 Sources used: <span id="sourcesText"></span>
+            </div>
+            <div class="rating-row">
+              <span class="rating-label">Was this analysis helpful?</span>
+              <button class="btn-rate" id="rateUp" onclick="rateAnalysis(true)">👍</button>
+              <button class="btn-rate" id="rateDown" onclick="rateAnalysis(false)">👎</button>
+              <span class="rating-thanks" id="ratingThanks">Thanks for the feedback!</span>
+            </div>
           </div>
         </div>
       </div>
@@ -679,6 +727,10 @@
     document.getElementById('confirmGate').style.display = 'none';
     document.getElementById('fixSection').style.display = 'none';
     document.getElementById('ethicalDisclaimer').style.display = 'none';
+    document.getElementById('sourcesUsed').style.display = 'none';
+    document.getElementById('rateUp').classList.remove('selected-up');
+    document.getElementById('rateDown').classList.remove('selected-down');
+    document.getElementById('ratingThanks').style.display = 'none';
     document.getElementById('explainToggle').classList.remove('visible');
     document.getElementById('explainSection').style.display = 'none';
     document.getElementById('technicalView').style.display = '';
@@ -808,7 +860,7 @@
 
   // ── Result rendering ──────────────────────────────────────────────────────
 
-  function renderResult(analysis) {
+  function renderResult(analysis, dataSources) {
     currentAnalysis = analysis;
     const panel = document.getElementById('resultPanel');
     const grid  = document.getElementById('resultGrid');
@@ -891,6 +943,25 @@
     // Show confirmation gate
     document.getElementById('confirmGate').style.display = 'block';
 
+    // Confidence-gated button
+    const btnConfirm = document.getElementById('btnConfirm');
+    const cautionNote = document.getElementById('cautionNote');
+    if (conf < 75) {
+      btnConfirm.className = 'btn-caution';
+      btnConfirm.textContent = '⚠ Proceed with caution';
+      cautionNote.style.display = 'block';
+    } else {
+      btnConfirm.className = 'btn-confirm';
+      btnConfirm.textContent = '✅ Yes, show me the fix';
+      cautionNote.style.display = 'none';
+    }
+
+    // Sources used
+    if (dataSources && dataSources.length) {
+      document.getElementById('sourcesText').textContent = dataSources.join(' · ');
+      document.getElementById('sourcesUsed').style.display = 'inline-flex';
+    }
+
     // Build technical text for "Explain It To Me"
     technicalText = [
       `Root Cause: ${analysis.root_cause || ''}`,
@@ -913,6 +984,14 @@
   }
 
   // ── Confirmation gate ─────────────────────────────────────────────────────
+
+  function rateAnalysis(positive) {
+    document.getElementById('rateUp').classList.toggle('selected-up', positive);
+    document.getElementById('rateDown').classList.toggle('selected-down', !positive);
+    document.getElementById('ratingThanks').style.display = 'inline';
+    // In production this would POST to /feedback; for now it's a UI signal
+    console.log('Analysis rated:', positive ? 'helpful' : 'not helpful', currentAnalysis?.root_cause);
+  }
 
   function confirmRCA(yes) {
     if (yes) {
@@ -1003,6 +1082,10 @@
     document.getElementById('confirmGate').style.display = 'none';
     document.getElementById('fixSection').style.display = 'none';
     document.getElementById('ethicalDisclaimer').style.display = 'none';
+    document.getElementById('sourcesUsed').style.display = 'none';
+    document.getElementById('rateUp').classList.remove('selected-up');
+    document.getElementById('rateDown').classList.remove('selected-down');
+    document.getElementById('ratingThanks').style.display = 'none';
     document.getElementById('explainToggle').classList.remove('visible');
     document.getElementById('explainSection').style.display = 'none';
     document.getElementById('technicalView').style.display = '';
@@ -1049,7 +1132,7 @@
             const event = JSON.parse(raw);
             appendStep(event);
             if (event.type === 'pipeline_complete' && event.final_analysis) {
-              renderResult(event.final_analysis);
+              renderResult(event.final_analysis, event.data_sources || []);
               setAnalyzing(false);
               setStatus('success', `✅ Analysis complete in ${event.elapsed_seconds}s`);
               document.getElementById('elapsedDisplay').textContent = `⏱ Completed in ${event.elapsed_seconds}s`;
