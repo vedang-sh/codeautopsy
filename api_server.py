@@ -128,6 +128,7 @@ async def get_demo_scenarios():
             {"id": "auth-service",         "label": "🔐 auth-service — NullPointerException"},
             {"id": "order-service",        "label": "📦 order-service — DB Pool Exhaustion"},
             {"id": "notification-service", "label": "🔔 notification-service — Kafka Consumer Lag"},
+            {"id": "dynamodb-service", "label": "☁️ AWS DynamoDB DNS Outage (Real: Oct 2025)"},
         ]
     }
 
