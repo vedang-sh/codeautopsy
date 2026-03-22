@@ -221,12 +221,34 @@ async def run_analysis(
     # Final summary
     # ------------------------------------------------------------------
     elapsed = round(time.time() - start_time, 1)
+
+    # Build data sources summary for ethical transparency
+    sources = []
+    if context_data.get("fetch_logs"):
+        log_data = context_data["fetch_logs"]
+        sources.append(f"{log_data.get('total_lines', log_data.get('error_count', 0))} log lines")
+    if context_data.get("get_recent_deployments"):
+        deps = context_data["get_recent_deployments"].get("deployments", [])
+        sources.append(f"{len(deps)} deployment{'s' if len(deps) != 1 else ''}")
+    if context_data.get("fetch_distributed_trace"):
+        spans = context_data["fetch_distributed_trace"].get("spans", [])
+        sources.append(f"{len(spans)} trace span{'s' if len(spans) != 1 else ''}")
+    if history_data.get("search_runbooks"):
+        rb = history_data["search_runbooks"].get("total_found", 0)
+        if rb:
+            sources.append(f"{rb} runbook{'s' if rb != 1 else ''}")
+    if history_data.get("search_past_incidents"):
+        inc = history_data["search_past_incidents"].get("total_found", 0)
+        if inc:
+            sources.append(f"{inc} past incident{'s' if inc != 1 else ''}")
+
     yield {
         "phase": "pipeline",
         "type": "pipeline_complete",
         "elapsed_seconds": elapsed,
         "final_analysis": analysis_result or {},
         "triage": triage_result,
+        "data_sources": sources,
         "message": f"Analysis complete in {elapsed}s",
     }
 
