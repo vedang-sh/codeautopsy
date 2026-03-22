@@ -472,17 +472,22 @@ IMPORTANT:
         thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": user_content}],
     ) as stream:
-        full_text = ""
-        thinking_text = ""
         for event in stream:
             if event.type == "content_block_delta":
                 delta_type = getattr(event.delta, "type", "")
                 if delta_type == "thinking_delta":
-                    thinking_text += event.delta.thinking
                     yield _event(agent_name, "thinking_block", delta=event.delta.thinking)
                 elif delta_type == "text_delta":
-                    full_text += event.delta.text
                     yield _event(agent_name, "thinking", delta=event.delta.text)
+        final_message = stream.get_final_message()
+
+    # Extract text and thinking from final message blocks (reliable vs delta accumulation)
+    full_text = ""
+    for block in final_message.content:
+        if block.type == "text":
+            full_text += block.text
+        elif block.type == "thinking":
+            pass  # already streamed above
 
     # Parse final analysis JSON
     try:
@@ -492,7 +497,6 @@ IMPORTANT:
             if clean.startswith("json"):
                 clean = clean[4:]
         clean = clean.strip()
-        # Extract JSON object if there's surrounding text
         if not clean.startswith("{"):
             start = clean.find("{")
             end = clean.rfind("}") + 1
